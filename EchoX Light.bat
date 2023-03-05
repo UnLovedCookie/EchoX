@@ -21,7 +21,8 @@ for /f %%A in ('"prompt $H &echo on &for %%B in (1) do rem"') do set BS=%%A
 rmdir %SystemDrive%\Windows\system32\adminrightstest >nul 2>&1
 mkdir %SystemDrive%\Windows\system32\adminrightstest >nul 2>&1
 if %errorlevel% neq 0 (
-powershell -NoProfile -NonInteractive -Command start -verb runas "'%~s0'" >nul 2>&1
+>"%tmp%\tmp.vbs" echo Set UAC = CreateObject^("Shell.Application"^) : UAC.ShellExecute "cmd.exe", "/c ""%~s0""", "", "runas", 1
+"%tmp%\tmp.vbs"
 exit /b
 )
 
@@ -59,14 +60,14 @@ Start "" /D "%tmp%" NSudo.exe -U:S -ShowWindowMode:Hide cmd /c "sc start "Truste
 :Optimize
 
 ::Disable Power Throttling
-call :ControlSet "Control\Session Manager\Power" "CoalescingTimerInterval" "0" >nul
-call :ControlSet "Control\Power" "EnergyEstimationEnabled" "0" >nul
-call :ControlSet "Control\Power" "EventProcessorEnabled" "0" >nul
-call :ControlSet "Control\Power\PowerThrottling" "PowerThrottlingOff" "1" >nul
+call :ControlSet "Control\Session Manager\Power" "CoalescingTimerInterval" "0"
+call :ControlSet "Control\Power" "EnergyEstimationEnabled" "0"
+call :ControlSet "Control\Power" "EventProcessorEnabled" "0"
+call :ControlSet "Control\Power\PowerThrottling" "PowerThrottlingOff" "1"
 echo Disable Power Throttling
 
 ::Disable USB Power Savings
-for /f "tokens=*" %%a in ('Reg query "HKLM\System\CurrentControlSet\Enum" /s /f "StorPort" 2^>nul ^| findstr "StorPort"') do call :CurrentControlSet "%%a" "EnableIdlePowerManagement" "0"
+for /f "tokens=*" %%a in ('Reg query "HKLM\System\CurrentControlSet\Enum" /s /f "StorPort" 2^>nul ^| findstr "StorPort"') do Call :ControlSet "%%a" "EnableIdlePowerManagement" "0"
 for /f %%a in ('wmic PATH Win32_PnPEntity GET DeviceID ^| find "USB\VID_"') do (
 call :ControlSet "Enum\%%a\Device Parameters" "EnhancedPowerManagementEnabled" "0"
 call :ControlSet "Enum\%%a\Device Parameters" "AllowIdleIrpInD3" "0"
@@ -75,7 +76,7 @@ call :ControlSet "Enum\%%a\Device Parameters" "DeviceSelectiveSuspended" "0"
 call :ControlSet "Enum\%%a\Device Parameters" "SelectiveSuspendEnabled" "0"
 call :ControlSet "Enum\%%a\Device Parameters" "SelectiveSuspendOn" "0"
 call :ControlSet "Enum\%%a\Device Parameters" "D3ColdSupported" "0"
-) >nul
+)
 echo Disable USB Power Savings
 
 ::Enable FSE
@@ -140,8 +141,18 @@ start "" /D "%tmp%" NSudo.exe -U:T -P:E -M:S -ShowWindowMode:Hide cmd /c "del /f
 start "" /D "%tmp%" NSudo.exe -U:T -P:E -M:S -ShowWindowMode:Hide cmd /c "del /f /q %WinDir%\System32\mcupdate_AuthenticAMD.dll"
 echo Disable Spectre And Meltdown
 
+::Disable Network Power Savings and Mitigations
+powershell -NoProfile -NonInteractive -Command ^
+$ErrorActionPreference = 'SilentlyContinue';^
+Disable-NetAdapterQos -Name "*";^
+Disable-NetAdapterPowerManagement -Name "*";^
+Get-NetAdapter -IncludeHidden ^| Set-NetIPInterface -WeakHostSend Enabled -WeakHostReceive Enabled;^
+Set-NetOffloadGlobalSetting -PacketCoalescingFilter Disabled -Chimney Disabled;^
+Set-NetTCPSetting -SettingName "*" -MemoryPressureProtection Disabled -InitialCongestionWindow 10
+echo Disable Network Power Savings And Mitigations
+
 ::https://docs.microsoft.com/en-us/windows-hardware/drivers/display/gdi-hardware-acceleration
-for /f %%a in ('Reg query "HKLM\System\CurrentControlSet\Control\Class" /v "VgaCompatible" /s 2^>nul ^| findstr "HKEY"') do Call :CurrentControlSet "%%a" "KMD_EnableGDIAcceleration" "1"
+for /f %%a in ('Reg query "HKLM\System\CurrentControlSet\Control\Class" /v "VgaCompatible" /s 2^>nul ^| findstr "HKEY"') do Call :ControlSet "%%a" "KMD_EnableGDIAcceleration" "1"
 ::Enable Hardware Accelerated Scheduling
 call :ControlSet "Control\GraphicsDrivers" "HwSchMode" "2"
 echo Enable Hardware Accelerated Scheduling
@@ -198,11 +209,11 @@ echo Disable Hibernation
 
 ::Raise the limit of paged pool memory
 fsutil behavior set memoryusage 2 >nul
-echo Raise the limit of paged pool memory
+echo Raise The Limit of Paged Pool Memory
 
 ::https://www.serverbrain.org/solutions-2003/the-mft-zone-can-be-optimized.html
 fsutil behavior set mftzone 2 >nul
-echo Optimize the Mft Zone
+echo Optimize The Mft Zone
 
 ::Enable Trim
 fsutil behavior set disabledeletenotify 0 >nul
@@ -238,10 +249,10 @@ Reg add "HKLM\Software\NVIDIA Corporation\Global\FTS" /v "EnableRID44231" /t REG
 Reg add "HKLM\Software\NVIDIA Corporation\Global\FTS" /v "EnableRID64640" /t REG_DWORD /d 0 /f >nul
 Reg add "HKLM\Software\NVIDIA Corporation\Global\FTS" /v "EnableRID66610" /t REG_DWORD /d 0 /f >nul
 Reg delete "HKLM\Software\Microsoft\Windows\CurrentVersion\Run" /v "NvBackend" /f >nul 2>&1
-schtasks /change /disable /tn "NvTmRep_CrashReport1_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}" >nul
-schtasks /change /disable /tn "NvTmRep_CrashReport2_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}" >nul
-schtasks /change /disable /tn "NvTmRep_CrashReport3_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}" >nul
-schtasks /change /disable /tn "NvTmRep_CrashReport4_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}" >nul
+schtasks /change /disable /tn "NvTmRep_CrashReport1_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}" >nul 2>&1
+schtasks /change /disable /tn "NvTmRep_CrashReport2_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}" >nul 2>&1
+schtasks /change /disable /tn "NvTmRep_CrashReport3_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}" >nul 2>&1
+schtasks /change /disable /tn "NvTmRep_CrashReport4_{B2FE1952-0186-46C3-BAEC-A80AA35AC5B8}" >nul 2>&1
 echo Disable Nvidia Telemetry
 
 ::Fix CPU Stock Speed
@@ -319,96 +330,201 @@ powercfg -setacvalueindex scheme_current SUB_INTSTEER PERPROCLOAD 10000
 )
 ::Disable Frequency Scaling
 powercfg -setacvalueindex scheme_current sub_processor PROCTHROTTLEMIN 100 >nul
-::Configure C-States
-powercfg -setacvalueindex scheme_current sub_processor IDLEPROMOTE 100 >nul
-powercfg -setacvalueindex scheme_current sub_processor IDLEDEMOTE 100 >nul
-powercfg -setacvalueindex scheme_current sub_processor IDLECHECK 20000 >nul
-::Don't Higher P-States on Lower C-States And Viseversa
-powercfg -setacvalueindex scheme_current sub_processor IDLESCALING 0 >nul
-::Disable Idle
-powercfg -setacvalueindex scheme_current sub_processor IDLEDISABLE 1 >nul
 ::Apply Changes
 powercfg -setactive scheme_current >nul
-powercfg -changename scheme_current "EchoX Ultimate Performance" "For EchoX Lite Optimizer %Version% (dsc.gg/EchoX) By UnLovedCookie" >nul
+powercfg -changename scheme_current "EchoX Lite Ultimate Performance" "For EchoX Lite Optimizer %Version% (dsc.gg/EchoX) By UnLovedCookie" >nul
 echo EchoX Power Plan
 
-::Grab iGPU Registry Key
-for /f %%i in ('Reg query "HKLM\System\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}" /t REG_SZ /s /e /f "Intel" ^| findstr "HKEY"') do (
-::Disable iGPU CStates
-Call :CurrentControlSet "%%i" "AllowDeepCStates" "0"
-echo Disable iGPU CStates
-::Intel iGPU Settings
-Call :CurrentControlSet "%%i" "Disable_OverlayDSQualityEnhancement" "1"
-Call :CurrentControlSet "%%i" "IncreaseFixedSegment" "1"
-Call :CurrentControlSet "%%i" "AdaptiveVsyncEnable" "0"
-Call :CurrentControlSet "%%i" "DisablePFonDP" "1"
-Call :CurrentControlSet "%%i" "EnableCompensationForDVI" "1"
-Call :CurrentControlSet "%%i" "NoFastLinkTrainingForeDP" "0"
-Call :CurrentControlSet "%%i" "ACPowerPolicyVersion" "16898"
-Call :CurrentControlSet "%%i" "DCPowerPolicyVersion" "16642"
-echo Intel iGPU Settings
-) >nul
+Reg query HKCU\Software\EchoX /v EchoXLitePowerTweaks >nul 2>&1 && (
+echo WScript.Quit msgbox^("Would you like to UNDO power tweaks?",vbYesNo+vbExclamation,"EchoX Lite"^) >"%tmp%\tmp.vbs"
+wscript "%tmp%\tmp.vbs"
+if !errorlevel! equ 6 (Reg delete HKCU\Software\EchoX /v EchoXLitePowerTweaks /f >nul
+	::NVCP
+	for /f "tokens=1" %%a in ('nvidia-smi --query-gpu^=driver_version --format^=csv 2^>nul') do set NvidiaDriverVersion=%%a
+	if "!NvidiaDriverVersion!" equ "528.24" (
+	if not exist "%tmp%\nvidiaProfileInspector\nvidiaProfileInspector.exe" (
+	curl -g -k -L -# -o "%tmp%\nvidiaProfileInspector.zip" "https://github.com/Orbmu2k/nvidiaProfileInspector/releases/latest/download/nvidiaProfileInspector.zip" >nul 2>nul
+	powershell -NoProfile Expand-Archive '%tmp%\nvidiaProfileInspector.zip' -DestinationPath '%tmp%\nvidiaProfileInspector\' >nul 2>nul
+	del /F /Q "%tmp%\nvidiaProfileInspector.zip"
+	)
+	del /F /Q "%tmp%\nvidiaProfileInspector\EchoProfile.nip"
+	::Enable Ultra Low Latency
+	call :NVCP "390467" "2"
+	call :NVCP "277041152" "1"
+	::Prefer Maximum Performance
+	call :NVCP "274197361" "5"
+	::Enable Anisotropic Optimizations
+	call :NVCP "8703344" "1"
+	call :NVCP "15151633" "1"
+	::Set Texture Filtering to High Performance
+	call :NVCP "13510289" "20"
+	call :NVCP "13510290" "1"
+	::Disable Cuda P2 State
+	call :NVCP "1343646814" "0"
+	::Enable All Thread Optimizations
+	call :NVCP "539870258" "31"
+	call :NVCP "544902290" "31"
+	call :NVCP "End"
+	start /D "%tmp%\nvidiaProfileInspector\" nvidiaProfileInspector.exe EchoProfile.nip
+	echo Reset NVCP Settings
+	)
 
-::Grab Nvidia Graphics Card Registry Key
-for /f %%a in ('Reg query "HKLM\System\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}" /t REG_SZ /s /e /f "NVIDIA" ^| findstr "HKEY"') do (
-::Nvidia PState 0
-Call :CurrentControlSet "%%a" "DisableDynamicPState" "1"
-echo Disable Nvidia PStates
-::Enable KBoost
-Call :CurrentControlSet "%%a" "PowerMizerEnable" "1"
-Call :CurrentControlSet "%%a" "PowerMizerLevel" "1"
-Call :CurrentControlSet "%%a" "PowerMizerLevelAC" "1"
-Call :CurrentControlSet "%%a" "PerfLevelSrc" "8738"
-echo Enable KBoost
-)
+	for /f %%i in ('Reg query "HKLM\System\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}" /t REG_SZ /s /e /f "Intel" ^| findstr "HKEY"') do (
+	Call :DelControlSet "%%i" "AllowDeepCStates"
+	echo Reset iGPU CStates
+	)
 
-::NVCP
-for /f "tokens=1" %%a in ('nvidia-smi --query-gpu^=driver_version --format^=csv 2^>nul') do set NvidiaDriverVersion=%%a
-if "%NvidiaDriverVersion%" equ "528.24" (
-if not exist "%tmp%\nvidiaProfileInspector\nvidiaProfileInspector.exe" (
-curl -g -k -L -# -o "%tmp%\nvidiaProfileInspector.zip" "https://github.com/Orbmu2k/nvidiaProfileInspector/releases/latest/download/nvidiaProfileInspector.zip" >nul 2>nul
-powershell -NoProfile Expand-Archive '%tmp%\nvidiaProfileInspector.zip' -DestinationPath '%tmp%\nvidiaProfileInspector\' >nul 2>nul
-del /F /Q "%tmp%\nvidiaProfileInspector.zip"
-)
+	for /f %%a in ('Reg query "HKLM\System\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}" /t REG_SZ /s /e /f "NVIDIA" ^| findstr "HKEY"') do (
+	Call :DelControlSet "%%a" "DisableDynamicPState"
+	echo Reset Nvidia PStates
+	Call :DelControlSet "%%a" "PowerMizerEnable"
+	Call :DelControlSet "%%a" "PowerMizerLevel"
+	Call :DelControlSet "%%a" "PowerMizerLevelAC"
+	Call :DelControlSet "%%a" "PerfLevelSrc"
+	echo Reset KBoost
+	)
+)) || (
+echo WScript.Quit msgbox^("Would you like to apply power tweaks?",vbYesNo+vbQuestion,"EchoX Lite"^) >"%tmp%\tmp.vbs"
+wscript "%tmp%\tmp.vbs"
+if !errorlevel! equ 6 echo WScript.Quit msgbox^("Power tweaks will set your CPU to 100%% usage in task manager!",vbOkCancel+vbExclamation,"EchoX Lite"^) >"%tmp%\tmp.vbs" & wscript "%tmp%\tmp.vbs"
+if !errorlevel! equ 1 (Reg add HKCU\Software\EchoX /v EchoXLitePowerTweaks /t REG_DWORD /d 1 /f >nul
+	::Disable Idle
+	powercfg -setacvalueindex scheme_current sub_processor IDLEDISABLE 1 >nul
+	::Configure C-States
+	powercfg -setacvalueindex scheme_current sub_processor IDLEPROMOTE 100 >nul
+	powercfg -setacvalueindex scheme_current sub_processor IDLEDEMOTE 100 >nul
+	powercfg -setacvalueindex scheme_current sub_processor IDLECHECK 20000 >nul
+	::Apply Changes
+	powercfg -setactive scheme_current >nul
+	echo Disable Idle
 
-del /F /Q "%tmp%\nvidiaProfileInspector\EchoProfile.nip"
-::Enable Ultra Low Latency
-call :NVCP "390467" "2"
-call :NVCP "277041152" "1"
-::Prefer Maximum Performance
-call :NVCP "274197361" "1"
-::Enable Anisotropic Optimizations
-call :NVCP "8703344" "1"
-call :NVCP "15151633" "1"
-::Set Texture Filtering to High Performance
-call :NVCP "13510289" "20"
-call :NVCP "13510290" "1"
-::Disable Cuda P2 State
-call :NVCP "1343646814" "0"
-::Enable All Thread Optimizations
-call :NVCP "539870258" "31"
-call :NVCP "544902290" "31"
-call :NVCP "End"
-start /D "%tmp%\nvidiaProfileInspector\" nvidiaProfileInspector.exe EchoProfile.nip
-echo NVCP Settings
-)
+	::NVCP
+	for /f "tokens=1" %%a in ('nvidia-smi --query-gpu^=driver_version --format^=csv 2^>nul') do set NvidiaDriverVersion=%%a
+	if "!NvidiaDriverVersion!" equ "528.24" (
+	if not exist "%tmp%\nvidiaProfileInspector\nvidiaProfileInspector.exe" (
+	curl -g -k -L -# -o "%tmp%\nvidiaProfileInspector.zip" "https://github.com/Orbmu2k/nvidiaProfileInspector/releases/latest/download/nvidiaProfileInspector.zip" >nul 2>nul
+	powershell -NoProfile Expand-Archive '%tmp%\nvidiaProfileInspector.zip' -DestinationPath '%tmp%\nvidiaProfileInspector\' >nul 2>nul
+	del /F /Q "%tmp%\nvidiaProfileInspector.zip"
+	)
+	del /F /Q "%tmp%\nvidiaProfileInspector\EchoProfile.nip"
+	::Prefer Optimal Performance
+	call :NVCP "274197361" "1"
+	start /D "%tmp%\nvidiaProfileInspector\" nvidiaProfileInspector.exe EchoProfile.nip
+	echo NVCP Settings
+	)
 
+	::Grab iGPU Registry Key
+	for /f %%i in ('Reg query "HKLM\System\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}" /t REG_SZ /s /e /f "Intel" ^| findstr "HKEY"') do (
+	::Disable iGPU CStates
+	Call :ControlSet "%%i" "AllowDeepCStates" "0"
+	echo Disable iGPU CStates
+	::Intel iGPU Settings
+	Call :ControlSet "%%i" "Disable_OverlayDSQualityEnhancement" "1"
+	Call :ControlSet "%%i" "IncreaseFixedSegment" "1"
+	Call :ControlSet "%%i" "AdaptiveVsyncEnable" "0"
+	Call :ControlSet "%%i" "DisablePFonDP" "1"
+	Call :ControlSet "%%i" "EnableCompensationForDVI" "1"
+	Call :ControlSet "%%i" "NoFastLinkTrainingForeDP" "0"
+	Call :ControlSet "%%i" "ACPowerPolicyVersion" "16898"
+	Call :ControlSet "%%i" "DCPowerPolicyVersion" "16642"
+	echo Intel iGPU Settings
+	)
 
-echo msgbox "Done^! Restart your computer to fully apply^." >"%tmp%\tmp.vbs"
+	::Grab Nvidia Graphics Card Registry Key
+	for /f %%a in ('Reg query "HKLM\System\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}" /t REG_SZ /s /e /f "NVIDIA" ^| findstr "HKEY"') do (
+	::Nvidia PState 0
+	Call :ControlSet "%%a" "DisableDynamicPState" "1"
+	echo Disable Nvidia PStates
+	::Enable KBoost
+	Call :ControlSet "%%a" "PowerMizerEnable" "1"
+	Call :ControlSet "%%a" "PowerMizerLevel" "1"
+	Call :ControlSet "%%a" "PowerMizerLevelAC" "1"
+	Call :ControlSet "%%a" "PerfLevelSrc" "8738"
+	echo Enable KBoost
+	)
+))
+
+Reg query HKCU\Software\EchoX /v EchoXLiteExperimentalTweaks >nul 2>&1 && (
+echo WScript.Quit msgbox^("Would you like to UNDO experimental tweaks?",vbYesNo+vbExclamation,"EchoX Lite"^) >"%tmp%\tmp.vbs" & wscript "%tmp%\tmp.vbs"
+if !errorlevel! equ 6 (Reg delete HKCU\Software\EchoX /v EchoXLiteExperimentalTweaks /f >nul
+	call :DelControlSet "Control\Session Manager\Memory Management" "DisablePagingExecutive"
+	call :DelControlSet "Control\Session Manager\Memory Management" "DisablePageCombining"
+	call :DelControlSet "Control\Session Manager\Memory Management" "LargeSystemCache"
+	call :DelControlSet "Control\Session Manager\Memory Management\PrefetchParameters" "EnablePrefetcher"
+	call :DelControlSet "Control\Session Manager\Memory Management\PrefetchParameters" "EnableSuperfetch"
+	call :DelControlSet "Control\Session Manager\Memory Management\PrefetchParameters" "EnableBoottrace"
+	call :DelControlSet "Control\GraphicsDrivers\Scheduler" "EnablePreemption"
+	call :DelControlSet "Services\nvlddmkm" "DisableWriteCombining"
+)) || (
+echo WScript.Quit msgbox^("Would you like to apply experimental tweaks?",vbYesNo+vbQuestion,"EchoX Lite"^) >"%tmp%\tmp.vbs" & wscript "%tmp%\tmp.vbs"
+if !errorlevel! equ 6 (Reg add HKCU\Software\EchoX /v EchoXLiteExperimentalTweaks /f >nul
+	::Disable Paging Executive
+	call :ControlSet "Control\Session Manager\Memory Management" "DisablePagingExecutive" "1"
+	echo Disable Paging Executive
+
+	::Disable Memory Compression and Page Combining
+	call :ControlSet "Control\Session Manager\Memory Management" "DisablePageCombining" "1"
+	powershell -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Unrestricted -Command "Disable-MMAgent -mc -pc"
+	echo Disable Memory Compression and Page Combining
+	
+	::Disable Large System Cache
+	call :ControlSet "Control\Session Manager\Memory Management" "LargeSystemCache" "1"
+	echo Disable Large System Cache
+
+	::Disable Prefetch
+	call :ControlSet "Control\Session Manager\Memory Management\PrefetchParameters" "EnablePrefetcher" "0"
+	call :ControlSet "Control\Session Manager\Memory Management\PrefetchParameters" "EnableSuperfetch" "0"
+	call :ControlSet "Control\Session Manager\Memory Management\PrefetchParameters" "EnableBoottrace" "0"
+	echo Disable Prefetch
+
+	::Enable Preemption
+	call :ControlSet "Control\GraphicsDrivers\Scheduler" "EnablePreemption" "1"
+	echo Enable Preemption
+
+	::Disable Write Combining
+	call :ControlSet "Services\nvlddmkm" "DisableWriteCombining" "1"
+	echo Disable Write Combining
+))
+
+::Release the current IP address obtains a new one.
+echo ipconfig /release >"%tmp%\RefreshNet.bat"
+echo ipconfig /renew >>"%tmp%\RefreshNet.bat"
+::Flush the DNS and Begin manual dynamic registration for DNS names.
+echo ipconfig /flushdns >>"%tmp%\RefreshNet.bat"
+echo ipconfig /registerdns >>"%tmp%\RefreshNet.bat"
+echo Refresh Internet
+::Restart Explorer
+start "" /D "%tmp%" NSudo.exe -U:T -P:E -M:S -ShowWindowMode:Hide cmd /c "%tmp%\RefreshNet.bat"
+echo Restart Exporer
+>nul 2>&1 taskkill /f /im explorer.exe && start "" explorer.exe
+echo msgbox "Done^! Restart your computer to fully apply^.",vbInformation,"EchoX Lite" >"%tmp%\tmp.vbs"
 wscript "%tmp%\tmp.vbs"
 exit /b
 
 :ControlSet
-Reg add "HKLM\System\CurrentControlSet\%~1" /v "%~2" /t REG_DWORD /d "%~3" /f >nul
-Reg add "HKLM\System\ControlSet001\%~1" /v "%~2" /t REG_DWORD /d "%~3" /f >nul
-Reg add "HKLM\System\ControlSet002\%~1" /v "%~2" /t REG_DWORD /d "%~3" /f >nul
+set ControlSet=%1
+if %ControlSet% neq %ControlSet:CurrentControlSet=% (
+Reg add !ControlSet! /v %2 /t REG_DWORD /d %3 /f >nul
+Reg add !ControlSet:CurrentControlSet=ControlSet001! /v %2 /t REG_DWORD /d %3 /f >nul
+Reg add !ControlSet:CurrentControlSet=ControlSet002! /v %2 /t REG_DWORD /d %3 /f >nul
+) else (
+Reg add "HKLM\System\CurrentControlSet\%~1" /v %2 /t REG_DWORD /d %3 /f >nul
+Reg add "HKLM\System\ControlSet001\%~1" /v %2 /t REG_DWORD /d %3 /f >nul
+Reg add "HKLM\System\ControlSet002\%~1" /v %2 /t REG_DWORD /d %3 /f >nul
+)
 goto:EOF
 
-:CurrentControlSet
+:DelControlSet
 set ControlSet=%1
-Reg add !ControlSet! /v "%~2" /t REG_DWORD /d "%~3" /f >nul
-Reg add !ControlSet:CurrentControlSet=ControlSet001! /v "%~2" /t REG_DWORD /d "%~3" /f >nul
-Reg add !ControlSet:CurrentControlSet=ControlSet002! /v "%~2" /t REG_DWORD /d "%~3" /f >nul
+if %ControlSet% neq %ControlSet:CurrentControlSet=% (
+Reg add !ControlSet! /v "%~2" /f >nul
+Reg add !ControlSet:CurrentControlSet=ControlSet001! /v "%~2" /f >nul
+Reg add !ControlSet:CurrentControlSet=ControlSet002! /v "%~2" /f >nul
+) else (
+Reg delete "HKLM\System\CurrentControlSet\%~1" /v "%~2" /f >nul
+Reg delete "HKLM\System\ControlSet001\%~1" /v "%~2" /f >nul
+Reg delete "HKLM\System\ControlSet002\%~1" /v "%~2" /f >nul
+)
 goto:EOF
 
 :NVCP

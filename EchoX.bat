@@ -2,7 +2,7 @@
 @echo off
 Mode 52,16
 title EchoX
-set Version=9.5
+set Version=9.6
 set DevBuild=No
 cd %tmp%
 
@@ -457,7 +457,7 @@ echo                  [32mWin Optimizations%col1%
 ::Powershell
 start "" /MIN powershell -NoProfile -NonInteractive -Command ^
 $ErrorActionPreference = 'SilentlyContinue';^
-Disable-MMAgent -mc -pc;^
+Disable-MMAgent -mc -PageCombining;^
 Enable-NetAdapterQos -Name "*";^
 Disable-NetAdapterPowerManagement -Name "*";^
 Get-NetAdapter -IncludeHidden ^| Set-NetIPInterface -WeakHostSend Enabled -WeakHostReceive Enabled;^
@@ -592,14 +592,14 @@ echo Disable CFG Lock
 Reg add "HKLM\System\CurrentControlSet\Control\Session Manager" /v "ProtectionMode" /t REG_DWORD /d "0" /f >>%log% 2>>%error%
 echo Disable NTFS/ReFS and FS Mitigations
 
-::Disable System Mitigations
-(for /f "tokens=3 skip=2" %%i in ('Reg query "HKLM\System\CurrentControlSet\Control\Session Manager\kernel" /v "MitigationAuditOptions"') do (
+::Disable Kernel Mitigations
+for /f "tokens=3 skip=2" %%i in ('Reg query "HKLM\System\CurrentControlSet\Control\Session Manager\kernel" /v "MitigationAuditOptions"') do (
 set "mitigation_mask=%%i"
 for /l %%i in (0,1,9) do set mitigation_mask=!mitigation_mask:%%i=2!
-) >nul 2>&1
-Reg add "HKLM\System\CurrentControlSet\Control\Session Manager\kernel" /v "MitigationOptions" /t REG_BINARY /d "!mitigation_mask!" /f >>%log% 2>nul
-Reg add "HKLM\System\CurrentControlSet\Control\Session Manager\kernel" /v "MitigationAuditOptions" /t REG_BINARY /d "!mitigation_mask!" /f >>%log% 2>nul
-echo Disable System Mitigations
+)
+Reg add "HKLM\System\CurrentControlSet\Control\Session Manager\kernel" /v "MitigationOptions" /t REG_BINARY /d "%mitigation_mask%" /f >nul
+Reg add "HKLM\System\CurrentControlSet\Control\Session Manager\kernel" /v "MitigationAuditOptions" /t REG_BINARY /d "%mitigation_mask%" /f >nul
+echo Disable Kernel Mitigations
 
 ::Slim Windows Defender and SmartScreen (From Melodies Windows 11 Optimizer)
 ::Start "" /wait "%tmp%\NSudo.exe" -U:T -P:E -M:S -ShowWindowMode:Hide cmd /c "sc config WinDefend start=disabled"
